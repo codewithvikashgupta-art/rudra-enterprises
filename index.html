@@ -755,32 +755,40 @@
     }
 
     function startCall() {
-      const num = document.getElementById('displayNum').textContent.trim();
-      if (!num) { updateFooter('Enter a number first'); return; }
-      isInCall = true;
+  const num = document.getElementById('displayNum').textContent.trim();
+  if (!num) { updateFooter('Enter a number first'); return; }
+  isInCall = true;
 
-      document.getElementById('callBtn').classList.add('active');
-      document.getElementById('callBtnIcon').textContent = '📵';
-      document.getElementById('callBtnText').textContent = 'End Call';
-      document.getElementById('ctiTimer').style.display = 'inline';
-      callSeconds = 0;
-      updateTimer();
-      callTimer = setInterval(updateTimer, 1000);
-      updateFooter('Call in progress · ' + num);
-      document.getElementById('ctiStatusText').textContent = '🔴 On Call';
+  document.getElementById('callBtn').classList.add('active');
+  document.getElementById('callBtnIcon').textContent = '📵';
+  document.getElementById('callBtnText').textContent = 'End Call';
+  document.getElementById('ctiTimer').style.display = 'inline';
+  callSeconds = 0;
+  updateTimer();
+  callTimer = setInterval(updateTimer, 1000);
+  updateFooter('Call in progress · ' + num);
+  document.getElementById('ctiStatusText').textContent = '🔴 On Call';
 
-      // Try Open CTI API
-      if (typeof sforce !== 'undefined' && sforce.opencti) {
-        sforce.opencti.notifyInitialCallStarted({
-  callType: sforce.opencti.CALL_TYPE.OUTBOUND,
-  callAttributes: { participantType: sforce.opencti.PARTICIPANT_TYPE.INITIAL_CALLER },
-  phoneNumber: num,
-  callback: function(res) {
-    if (!res.success) updateFooter('CTI error: ' + JSON.stringify(res.errors));
-  }
-});
-      }
+  // Try Open CTI API
+  if (typeof sforce !== 'undefined' && sforce.opencti && typeof sforce.opencti.notifyInitialCallStarted === 'function') {
+    try {
+      const callType = (sforce.opencti.CALL_TYPE && sforce.opencti.CALL_TYPE.OUTBOUND) || 'outbound';
+      const participantType = (sforce.opencti.PARTICIPANT_TYPE && sforce.opencti.PARTICIPANT_TYPE.INITIAL_CALLER) || 'initial_caller';
+
+      sforce.opencti.notifyInitialCallStarted({
+        callType: callType,
+        callAttributes: { participantType: participantType },
+        phoneNumber: num,
+        callback: function(res) {
+          if (!res || !res.success) updateFooter('CTI error: ' + JSON.stringify(res && res.errors));
+        }
+      });
+    } catch (e) {
+      console.error('[CTI] notifyInitialCallStarted failed:', e);
+      updateFooter('CTI error: ' + e.message);
     }
+  }
+}
 
     function endCall() {
       isInCall = false; isMuted = false; isOnHold = false;
@@ -802,12 +810,18 @@
       updateFooter('Call ended · ' + dur);
       document.getElementById('ctiStatusText').textContent = 'Connected · Salesforce Open CTI';
 
-      if (typeof sforce !== 'undefined' && sforce.opencti) {
-        sforce.opencti.notifyCallEnded({
-  callAttributes: { participantType: sforce.opencti.PARTICIPANT_TYPE.INITIAL_CALLER },
-  callback: () => {}
-});
-      }
+      if (typeof sforce !== 'undefined' && sforce.opencti && typeof sforce.opencti.notifyCallEnded === 'function') {
+  try {
+    const participantType = (sforce.opencti.PARTICIPANT_TYPE && sforce.opencti.PARTICIPANT_TYPE.INITIAL_CALLER) || 'initial_caller';
+    sforce.opencti.notifyCallEnded({
+      callAttributes: { participantType: participantType },
+      callback: () => {}
+    });
+  } catch (e) {
+    console.error('[CTI] notifyCallEnded failed:', e);
+    updateFooter('CTI error: ' + e.message);
+  }
+}
     }
 
     function toggleMute() {
